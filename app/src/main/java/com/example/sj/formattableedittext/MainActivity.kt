@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity() {
                 showOpenedTagsBefore(s)
 
                 // todo vorobei check if one of tags editing: remove tags logic
-                if (reopenTagToEdit(s, wordStart, oldTextLengthFromStart, newTextLengthFromStart)) {
+                if (reopenTagToEdit(wordStart, oldTextLengthFromStart, newTextLengthFromStart)) {
                     // todo vorobei close other opened tags
                     requestTagName()
                     return
@@ -105,12 +105,15 @@ class MainActivity : AppCompatActivity() {
                 it.end -= count
             }
         } else { // pasted instead of prev text
-            val toMove = userTags.filter { it.start > start + count }
-            toMove.forEach {
-                Log.d("vorobeisj", "moved r $it ")
-                it.start += after - count
-                it.end += after - count
-            }
+
+            reopenTagToEdit(start, count, after)
+
+//            val toMove = userTags.filter { it.start > start + count }
+//            toMove.forEach {
+//                Log.d("vorobeisj", "moved r $it ")
+//                it.start += after - count
+//                it.end += after - count
+//            }
         }
     }
 
@@ -123,8 +126,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun reopenTagToEdit(s: CharSequence,
-                        wordStart: Int,
+    fun reopenTagToEdit(wordStart: Int,
                         oldTextLengthFromStart: Int,
                         newTextLengthFromStart: Int): Boolean {
         Log.d("vorobeisj", "reopenTagToEdit")
