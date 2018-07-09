@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="size_xxlarge">32dp</dimen>
+    <dimen name="size_smedium">16dp</dimen>
+    <dimen name="size_medium">16dp</dimen>
+    <dimen name="size_avatar">40dp</dimen>
+    <dimen name="size_xxxlarge">48dp</dimen>
+</resources>
