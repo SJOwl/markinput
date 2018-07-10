@@ -20,18 +20,13 @@ class MainActivity : AppCompatActivity() {
 
     private val userTags: MutableList<UserTag> = mutableListOf()
 
-    private val tagSymbol = '@'
-
-    private var textEdit = ""
-
     private val friendsAdapter: FriendsAdapter by lazy {
         FriendsAdapter().apply {
-            onItemClickListener = { user ->
-                closeOpenedTag(user)
-                setRichText()
-            }
+            onItemClickListener = { user -> setUserId(user) }
         }
     }
+
+    private val inputs: List<InputItem> = mutableListOf()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,7 +34,7 @@ class MainActivity : AppCompatActivity() {
 
         setRecycler()
 
-        tagFriendButton.setOnClickListener { tagFriend() }
+        tagFriendButton.setOnClickListener { }
 
         closeTagFriensListButton.setOnClickListener {
             Log.d("vorobeisj", "close dialog clicked")
@@ -47,235 +42,88 @@ class MainActivity : AppCompatActivity() {
         }
 
         editText.addTextChangedListener(object : EditableTextWatcher() {
-
-            override fun beforeTextChange(s: CharSequence, start: Int, count: Int, after: Int) {
-                Log.d("vorobeisj", "beforeTextChange s=$s, start=$start, count=$count, after=$after ")
-                moveBorders(start, count, after)
-                removeRemovedTags(s, start, count, after)
-            }
-
             override fun onTextChange(s: CharSequence,
                                       wordStart: Int,
                                       oldTextLengthFromStart: Int,
                                       newTextLengthFromStart: Int) {
-                Log.d("vorobeisj", "onTextChanged     s=\"$s\", wordStart=$wordStart, oldTextLengthFromStart=$oldTextLengthFromStart, newTextLengthFromStart=$newTextLengthFromStart") //To change body of created functions use File | Settings | File Templates.
-                showOpenedTagsBefore(s)
+                // check for " @" or "^@" - create new UserItem and add to inputs
 
-                // todo vorobei check if one of tags editing: remove tags logic
-                if (reopenTagToEdit(wordStart, oldTextLengthFromStart, newTextLengthFromStart)) {
-                    // todo vorobei close other opened tags
-                    requestTagName()
-                    return
-                }
+                // change text
 
-                textEdit = s.toString()
+                // request friend if string not empty
 
-                if (!isAnyTagOpened() && isTagFriendStart(s, wordStart, oldTextLengthFromStart, newTextLengthFromStart)) {
-                    openNewTag(s, wordStart, oldTextLengthFromStart, newTextLengthFromStart)
-                }
-                if (isAnyTagOpened()) {
-                    editOpenedTag(s, wordStart, oldTextLengthFromStart, newTextLengthFromStart)
-                    requestTagName()
-                }
-
-                showOpenedTagsAfter(s)
             }
         })
 
         tagFriendsRecycler.setInvisible()
     }
 
-    /**
-     * count - before
-     * after
-     */
-    fun moveBorders(start: Int, count: Int, after: Int) {
-        if (count == 0) { // add symbols
-            val toMove = userTags.filter { it.start > start }
-            toMove.forEach {
-                Log.d("vorobeisj", "moved r $it ")
-                it.start += after
-                it.end += after
+    fun tagFriend(s: CharSequence,
+                  wordStart: Int,
+                  oldTextLengthFromStart: Int,
+                  newTextLengthFromStart: Int,
+                  inputs: List<InputItem>) {
+        Log.d("vorobeisj", "string  ")
+        val end = wordStart + newTextLengthFromStart
+        val newText = s.subSequence(wordStart, end)
+        if (newText == "@") {
+            if (((end > 0 && s[end - 1] == ' ') ||
+                            (end < s.length - 1 && s[end + 1] == ' '))) { // "<text> @| <text>"
+                // find place for new mention, split previously created text items
+            } else if (end == 1) { // "@| <text>"
+                // put new mention as first item
             }
-        } else if (after == 0) { // remove symbols
-            val toMove = userTags.filter { it.start > start }
-            toMove.forEach {
-                Log.d("vorobeisj", "moved l $it ")
-                it.start -= count
-                it.end -= count
-            }
-        } else { // pasted instead of prev text
-
-            reopenTagToEdit(start, count, after)
-
-//            val toMove = userTags.filter { it.start > start + count }
-//            toMove.forEach {
-//                Log.d("vorobeisj", "moved r $it ")
-//                it.start += after - count
-//                it.end += after - count
-//            }
         }
     }
 
-    fun removeRemovedTags(s: CharSequence, start: Int, count: Int, after: Int) {
-        if (count == s.length) return // add name with id
-        val toRemove = userTags.filter { it.start > start && it.end < start + count }
-        toRemove.forEach {
-            Log.d("vorobeisj", "removed $it ")
-            userTags.remove(it)
+    fun getSearchRequest(inputs: List<InputItem>): String? {
+        val edited = inputs.filter { it.type == InputTypes.TYPE_USER }.filter { (it as InputItemUser).userId.isNotEmpty() }
+        if (edited.size > 1) throw IllegalStateException("At one time 2 mentions are edited")
+        if (edited.isNotEmpty()) return edited[0].text
+        return null
+    }
+
+    fun getSpannableFromInputs(inputs: List<InputItem>): SpannableString {
+        val stringBuilder = StringBuilder()
+        val tags: List<Range> = mutableListOf()
+        val max = inputs.size - 1
+        inputs.forEachIndexed { index, inputItem ->
+            val start = stringBuilder.length
+            stringBuilder.append("${inputItem.text}")
+            val end = stringBuilder.length
+            if (index < max) stringBuilder.append(" ")
         }
-    }
 
-    fun reopenTagToEdit(wordStart: Int,
-                        oldTextLengthFromStart: Int,
-                        newTextLengthFromStart: Int): Boolean {
-        Log.d("vorobeisj", "reopenTagToEdit")
-        // if have closed tags which in range of tag, open it, clear id and name
-        val editedTag = userTags.filter { it.isIsInRange(wordStart) }
-                .filter { !it.opened }
-                .firstOrNull()
-        editedTag?.run {
-            val s = start
-            val e = end
-
-            Log.d("vorobeisj", "editing $this")
-            val replaced = textEdit.replaceRange(start + 1, end, "")
-            val removed = textEdit.length - replaced.length
-            textEdit = replaced
-            opened = true
-            userName = ""
-            userId = ""
-            end = start + 1
-            Log.d("vorobeisj", "after editing $this")
-
-            moveBorders(start, removed - 1, 0)
-
-            return true
-        }
-        return false
-    }
-
-    private fun showOpenedTagsBefore(s: CharSequence) {
-        Log.d("vorobeisj", "*************************** before \"$s\"")
-        userTags.forEach { Log.d("vorobeisj", "$it") }
-        Log.d("vorobeisj", "***************************")
-    }
-
-    private fun showOpenedTagsAfter(s: CharSequence) {
-        Log.d("vorobeisj", "=========================== after \"$s\"")
-        userTags.forEach { Log.d("vorobeisj", "$it") }
-        Log.d("vorobeisj", "===========================")
-    }
-
-    fun isTagFriendStart(s: CharSequence,
-                         wordStart: Int,
-                         oldTextLengthFromStart: Int,
-                         newTextLengthFromStart: Int): Boolean {
-        if (wordStart >= s.length) return false
-        userTags.forEach { if (it.start == wordStart) return false }
-
-        if (wordStart > 0) return s[wordStart - 1] == ' ' && s[wordStart] == '@'
-        else return s[wordStart] == '@'
-    }
-
-    fun getOpenedTag(): UserTag? {
-        val openedList = userTags.filter { it.opened }
-        if (openedList.size > 1) throw IllegalStateException("Only one tag can be opened at a time")
-        if (openedList.isEmpty()) return null
-        return openedList[0]
-    }
-
-    fun closeOpenedTag(user: UserItem) {
-        // todo vorobei move ranges of all tags that later than current user
-        getOpenedTag()?.let { tag ->
-            val t = editText.text.toString()
-            textEdit = t.replaceRange(tag.start + 1, tag.end, "${user.displayName} ")
-
-            val start = tag.end
-            val count = 0
-            val after = textEdit.length - t.length
-
-            tag.end = tag.start + user.displayName.length + 1
-            tag.userName = user.displayName
-            tag.userId = user.id
-            tag.opened = false
-
-            moveBorders(start, count, after)
-        }
-        hideFriendsList()
-        Log.d("vorobeisj", "tag closed $user")
-    }
-
-    fun openNewTag(s: CharSequence,
-                   wordStart: Int,
-                   oldTextLengthFromStart: Int,
-                   newTextLengthFromStart: Int) {
-        userTags.add(UserTag(wordStart, wordStart + newTextLengthFromStart)) // or +1
-        Log.d("vorobeisj", "new tag opened ${getOpenedTag()}")
-    }
-
-    fun isAnyTagOpened() = userTags.filter { it.opened }.isNotEmpty()
-
-    fun setRichText(text: String = textEdit) {
-
-        Log.d("vorobeisj", "text = \"$text\"")
-        // todo vorobei can not input space
-        val spannable = SpannableString(text).apply {
-            userTags.forEach { tag ->
-                val start = tag.start
-                val end = tag.end
-
+        return SpannableString(stringBuilder.toString()).apply {
+            tags.forEach { tag ->
                 try {
-                    setSpan(StyleSpan(Typeface.BOLD), start, end, 0)
-                    setSpan(ForegroundColorSpan(Color.parseColor("#ff9900")), start, end, 0)
+                    setSpan(StyleSpan(Typeface.BOLD), tag.start, tag.end, 0)
+                    setSpan(ForegroundColorSpan(Color.parseColor("#ff9900")), tag.start, tag.end, 0)
                 } catch (e: IndexOutOfBoundsException) {
                     Log.d("vorobeisj", "can not set span IOOBE ")
                 }
             }
         }
-        editText.setText(spannable)
-        placeCursor()
     }
 
-    fun editOpenedTag(s: CharSequence,
-                      wordStart: Int,
-                      oldTextLengthFromStart: Int,
-                      newTextLengthFromStart: Int) {
-        getOpenedTag()?.let { tag ->
-            //            val delta = newTextLengthFromStart-oldTextLengthFromStart
-//            userTags.filter { it.start > tag.end }.forEach { tag ->
-//                tag.end += delta
-//                tag.start += delta
-//            }
+    fun getStringFromInputs(inputs: List<InputItem>): String = inputs.joinToString(" ") { it.text }
 
-            tag.end = wordStart + newTextLengthFromStart
-            tag.userName = s.substring(tag.start, tag.end)
-        }
+    fun changeText(s: CharSequence,
+                   wordStart: Int,
+                   oldTextLengthFromStart: Int,
+                   newTextLengthFromStart: Int,
+                   inputs: List<InputItem>): String {
+        // find replaced text at inputs
+        // text replace with text
+        // if user's display name changed - change it's type, put new item with text, not user
+        // if user's name changed, but user has no id - return user name to request
+
+
+        return ""
     }
 
-    fun requestTagName() {
-        suggestFriends()
-        getOpenedTag()?.let { tag ->
-            getUsersByQuery(tag.getName()).subscribe { users -> friendsAdapter.items = users }
-        }
-        setRichText(textEdit)
-    }
-
-    fun placeCursor() {
-        val tag = getOpenedTag()
-        var pos = textEdit.length
-        if (tag != null) pos = tag.end
-        Log.d("vorobeisj", "place cursor at $pos")
-        editText.placeCursor(pos)
-    }
-
-    fun tagFriend() {
-        editText.requestFocus()
-        val rawText = editText.text.trim()
-        textEdit = if (rawText.isEmpty()) "@" else "$rawText @"
-        suggestFriends()
-        openNewTag(textEdit, rawText.length + 1, 0, 1)
-        setRichText()
+    fun setUserId(user: UserItem) {
+        // find input item with text = requestedString and empty id, set id and name
     }
 
     fun suggestFriends() = tagFriendsRecycler.setVisible()
@@ -351,3 +199,21 @@ data class UserTag(var start: Int,
     fun isIsInRange(pos: Int) = pos in start..end
     fun getName() = userName.replace("@", "")
 }
+
+enum class InputTypes {
+    TYPE_TEXT,
+    TYPE_USER
+}
+
+open class InputItem(var type: InputTypes, text: String = "") {
+    open var text: String = text
+}
+
+class InputItemText(text: String) : InputItem(InputTypes.TYPE_TEXT, text)
+
+class InputItemUser(displayName: String, val prefix: String = "@", var userId: String = "") : InputItem(InputTypes.TYPE_USER, displayName) {
+    override var text: String = displayName
+        get() = "$prefix$field"
+}
+
+data class Range(var start: Int = 0, var end: Int = 0)
