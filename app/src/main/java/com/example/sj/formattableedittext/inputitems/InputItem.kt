@@ -14,6 +14,8 @@ open class InputItem(var type: InputTypes, text: String = "") {
         this.text = "${this.text}$toAppend"
     }
 
+    open var markdown: String = ""
+        get() = text
     /**
      * pos : 0 is at begin of @text
      */

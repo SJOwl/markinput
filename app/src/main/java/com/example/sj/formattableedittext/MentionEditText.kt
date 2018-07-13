@@ -26,6 +26,14 @@ class MentionEditText : EditText {
     var onQueryUser: ((query: String) -> Unit)? = null
     var onStopQuery: (() -> Unit)? = null
 
+    var markdownText: String = ""
+        get() {
+            val builder = StringBuilder()
+            inputs.forEach { builder.append(it.markdown) }
+            val regex = Regex("[\\s-`~#№\$%^\"&*,]")
+            return builder.toString().trim().trim { c: Char -> regex.containsMatchIn(c.toString()) }
+        }
+
     private var notToWatchText = false
 
     private val inputs: MutableList<InputItem> = ArrayList()
@@ -92,13 +100,15 @@ class MentionEditText : EditText {
 
     fun startMentioning() {
         val start = selectionStart
-        var s = getStringFromInputs(inputs)
-        val ins = if (s.length == 0) "@" else " @"
+        val s = getStringFromInputs(inputs)
+        var ins = if (isPrevSymbolSpace(s)) "@" else " @"
         val res = "${s.substring(0, start)}$ins${s.substring(start, s.length)}"
         clearUsers()
         editAdd(res, start, ins.length)
         printInputs()
     }
+
+    private fun isPrevSymbolSpace(s: String) = s.length == 0 || s[selectionStart - 1].toString().matches(Regex("\\s"))
 
     fun setUserId(user: UserItem) {
         val openedUsers = inputs
@@ -122,33 +132,22 @@ class MentionEditText : EditText {
     private fun editAdd(newString: CharSequence, start: Int, count: Int) {
         updateInputs(inputs)
 
-        val addedText = newString.substring(start, start + count)
-        Log.d("vorobeisj", "add \"$addedText\" start=$start, count=$count")
+        var addedText = newString.substring(start, start + count)
 
         var edited = getItemToAdd(start)
                 ?: throw IllegalStateException("Edited item can not be null")
 
-        if (addedText == " @") {
-            // todo vorobei what if pasted "some text @"?
-            val left = InputItemText(edited.text.substring(0, start - edited.start))
-            val right = InputItemText(edited.text.substring(start - edited.start, edited.end - edited.start))
-            val index = inputs.indexOf(edited)
-            inputs.removeAt(index)
-            left.append(" ")
-            inputs.add(index, left)
-            val user = InputItemUser()
-            inputs.add(index + 1, user)
-            onQueryUser?.invoke(user.displayName)
-            inputs.add(index + 2, right)
-        }
-
         if ((addedText == "@" && start == 0) ||
-                (addedText == "@" && start - edited.start - 1 > 0 &&
-                        edited.text[start - edited.start - 1] == ' ')) {
+                (addedText == "@" && start - edited.start - 1 > 0 && edited.text[start - edited.start - 1] == ' ') ||
+                (addedText.endsWith("@") && addedText.length > 1) ||
+                (addedText == "@" && isPrevSymbolSpace(getStringFromInputs(inputs)))) {
+            val prefix = if (addedText.length > 1) addedText.substring(0, addedText.length - 1) else ""
+
             val left = InputItemText(edited.text.substring(0, start - edited.start))
             val right = InputItemText(edited.text.substring(start - edited.start, edited.end - edited.start))
             val index = inputs.indexOf(edited)
             inputs.removeAt(index)
+            left.append(prefix)
             inputs.add(index, left)
             val user = InputItemUser()
             inputs.add(index + 1, user)
@@ -159,7 +158,7 @@ class MentionEditText : EditText {
                 when (edited) {
                     is InputItemUser -> {
                         if (edited.userId.isEmpty()) { // append to edited user
-                            if (addedText.contains(Regex("\\s"))) {
+                            if (addedText.contains(Regex("\\s"))) { // added spacing symbol
                                 edited = replaceWithTextItem(edited)
                                 edited.append(addedText)
                             } else {
@@ -180,13 +179,11 @@ class MentionEditText : EditText {
                 edited.add(start - edited.start, addedText)
             }
         }
-//        if (edited is InputItemUser) queryUser(edited)
+
         showRich(start + count)
     }
 
     private fun editRemove(start: Int, count: Int) {
-        Log.d("vorobeisj", "remove start=$start, count=$count")
-
         updateInputs(inputs)
         val editStartList = inputs.filter { it.isInRemoveRange(start) }
         var end = start + count - 1
@@ -212,7 +209,6 @@ class MentionEditText : EditText {
             inputs[editStartIndex].let { it.removeRange(start, it.end) }
         } else {
             inputs[editStartIndex].let {
-
                 try {
                     it.removeRange(start, start + count)
                     // edit user search
@@ -248,7 +244,6 @@ class MentionEditText : EditText {
     }
 
     private fun updateInputs(inputs: List<InputItem>): String {
-        Log.e("vorobeisj", "recalc inputs called") // todo vorobei check calls are needed
         concatTextItems()
         val stringBuilder = StringBuilder()
         inputs.forEach { input ->
@@ -278,6 +273,7 @@ class MentionEditText : EditText {
 
     private fun showRich(cursorPos: Int) {
         notToWatchText = true
+
         setText(getSpannableFromInputs(inputs))
         placeCursor(cursorPos)
         notToWatchText = false

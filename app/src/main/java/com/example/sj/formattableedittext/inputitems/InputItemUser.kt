@@ -4,17 +4,17 @@ class InputItemUser(var displayName: String = "", var prefix: String = "@", var 
     override var text: String = displayName
         get() = "$prefix$displayName"
 
+    // [john Doe](evry://user/pUpkENid)
+    override var markdown: String = ""
+        get() = "[$displayName](evry://user/${userId})"
+
     override fun append(toAppend: String) {
         this.displayName = "${this.displayName}$toAppend"
     }
 
     override fun removeRange(start: Int, end: Int) {
-//        try {
         val s = start - this.start - prefix.length
         val e = end - this.start - prefix.length
         displayName = displayName.replaceRange(s, e, "")
-//        } catch (e: IndexOutOfBoundsException) {
-//            Log.d("vorobeisj", "")
-//        }
     }
 }

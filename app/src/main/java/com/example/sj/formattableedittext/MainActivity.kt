@@ -3,6 +3,7 @@ package com.example.sj.formattableedittext
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.LinearLayoutManager
+import android.util.Log
 import com.example.sj.formattableedittext.ext.setInvisible
 import com.example.sj.formattableedittext.ext.setVisible
 import kotlinx.android.synthetic.main.activity_main.*
@@ -31,7 +32,11 @@ class MainActivity : AppCompatActivity() {
 
         mentionEditText.onStopQuery = { hideFriendsList() }
 
-        sendButton.setOnClickListener { mentionEditText.clear() }
+        sendButton.setOnClickListener {
+            Log.d("vorobeisj", "markdown is \"${mentionEditText.markdownText}\"")
+            mentionEditText.clear()
+        }
+
         tagFriendButton.setOnClickListener { mentionEditText.startMentioning() }
 
         closeTagFriensListButton.setOnClickListener {
