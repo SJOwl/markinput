@@ -11,7 +11,7 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:background="#fcfcfc"
-        app:layout_constraintBottom_toTopOf="@id/editText"
+        app:layout_constraintBottom_toTopOf="@id/mentionEditText"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
@@ -54,8 +54,8 @@
     </android.support.constraint.ConstraintLayout>
 
 
-    <com.example.sj.formattableedittext.MessageInputEditText
-        android:id="@+id/editText"
+    <com.example.sj.formattableedittext.MentionEditText
+        android:id="@+id/mentionEditText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:background="@null"
@@ -74,9 +74,9 @@
         android:textStyle="bold"
         android:textSize="30sp"
         android:gravity="center"
-        app:layout_constraintBottom_toBottomOf="@id/editText"
+        app:layout_constraintBottom_toBottomOf="@id/mentionEditText"
         app:layout_constraintEnd_toStartOf="@id/sendButton"
-        app:layout_constraintTop_toTopOf="@id/editText"/>
+        app:layout_constraintTop_toTopOf="@id/mentionEditText"/>
 
     <TextView
         android:id="@+id/sendButton"
@@ -87,8 +87,8 @@
         android:textStyle="bold"
         android:textSize="20sp"
         android:gravity="center"
-        app:layout_constraintBottom_toBottomOf="@id/editText"
+        app:layout_constraintBottom_toBottomOf="@id/mentionEditText"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@id/editText"/>
+        app:layout_constraintTop_toTopOf="@id/mentionEditText"/>
 
 </android.support.constraint.ConstraintLayout>
