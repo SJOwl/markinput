@@ -24,51 +24,12 @@ class MentionEditText : EditText {
     constructor(context: Context, attrs: AttributeSet) : super(context, attrs)
     constructor(context: Context, attrs: AttributeSet, defStyleAttr: Int) : super(context, attrs, defStyleAttr)
 
-    var notToWatchText = false
-
-    private val inputs: MutableList<InputItem> = ArrayList()
-
-    /**
-     * called when MentionEditText queries username and id
-     */
     var onQueryUser: ((query: String) -> Unit)? = null
-    /**
-     * called when not querying any more
-     */
     var onStopQuery: (() -> Unit)? = null
 
-    fun clear() {
-        notToWatchText = true
-        clearFocus()
-        setText("")
-        inputs.clear()
-        inputs.add(InputItemText())
-        notToWatchText = false
-    }
+    private var notToWatchText = false
 
-    /**
-     * called when user closes friends list
-     */
-    fun stopMentioning() {
-        val edited = inputs.filter { it.type == InputTypes.TYPE_USER }.filter { (it as InputItemUser).userId.isEmpty() }
-        edited.forEach { replaceWithTextItem(it as InputItemUser) }
-        Log.d("vorobeisj", "close dialog clicked")
-        showRich(selectionStart)
-    }
-
-    fun startMentioning() {
-        // todo vorobei add user item where editing now
-        val start = selectionStart
-        var s = getStringFromInputs(inputs)
-        val ins = if (s.length == 0) "@" else " @"
-        val res = "${s.substring(0, start)}$ins${s.substring(start, s.length)}"
-        inputs.filter { it.type == InputTypes.TYPE_USER }
-                .filter { (it as InputItemUser).userId.isEmpty() }
-                .forEach { replaceWithTextItem(it as InputItemUser) }
-
-        editAdd(res, start, ins.length)
-        printInputs()
-    }
+    private val inputs: MutableList<InputItem> = ArrayList()
 
     init {
         inputs.add(InputItemText())
@@ -83,86 +44,87 @@ class MentionEditText : EditText {
             private var cursorStartAfter = 0
             private var cursorEndAfter = 0
 
-            var sw = ""
-
             override fun beforeTextChange(s: CharSequence, start: Int, count: Int, after: Int) {
                 if (notToWatchText) return
-                cursorStartBefore = this@MentionEditText.selectionStart
-                cursorEndBefore = this@MentionEditText.selectionEnd
+                cursorStartBefore = selectionStart
+                cursorEndBefore = selectionEnd
+                Log.d("vorobeisj", "btc start=$start, count=$count, after=$after, csb=$cursorStartBefore, ceb=$cursorEndBefore")
             }
 
-            override fun afterTextChange(s: Editable) {
+            override fun onTextChange(s: CharSequence, strt: Int, before: Int, count: Int) {
+                Log.d("vorobeisj", "btc start=$strt, before=$before, after=$count, csb=$cursorStartBefore, ceb=$cursorEndBefore")
+
                 if (notToWatchText) return
-                cursorStartAfter = this@MentionEditText.selectionStart
-                cursorEndAfter = this@MentionEditText.selectionEnd
 
-
-                sw = getStringFromInputs(inputs)
-                Log.d("vorobeisj", "beforech = \"$sw\"")
-                Log.d("vorobeisj", "afterch  = \"$s\"")
+                cursorStartAfter = selectionStart
+                cursorEndAfter = selectionEnd
 
                 val diff = StringDifference(cursorStartBefore, cursorEndBefore, cursorStartAfter, cursorEndAfter)
-
-//                if (diff.noDiff) return
 
                 added = diff.added
                 removed = diff.removed
                 start = diff.start
                 after = diff.after
 
-                Log.d("vorobeisj", "cursorStartBefore=$cursorStartBefore,cursorEndBefore=$cursorEndBefore,cursorStartAfter=$cursorStartAfter,cursorEndAfter=$cursorEndAfter add=$added, rem=$removed, start=$start, after=$after")
-
-                if (this@MentionEditText.text.length < start + added)
-                    Log.d("vorobeisj", "trouble")
-
+                if (removed != 0) editRemove(start, removed)
                 if (added != 0) editAdd(s, start, added)
-                if (removed != 0) editRemoved(s, start, removed)
 
                 concatTextItems()
 
-                recalcStringFromInputs(inputs)
+                updateInputs(inputs)
 
                 printInputs()
-
-                Log.d("vorobeisj", "***************************************")
             }
         })
-
     }
 
-    private fun printInputs() {
-        Log.d("vorobeisj", "inputs *******************************")
-        inputs.forEach {
-            Log.d("vorobeisj", "${it.type} s=${it.start} e=${it.end} text=\'${it.text}\'")
-        }
-        Log.d("vorobeisj", "**************************************************************")
+    fun clear() {
+        notToWatchText = true
+        setText("")
+        inputs.clear()
+        inputs.add(InputItemText())
+        notToWatchText = false
     }
 
     /**
-     * iterate through list and concat neighbor text items
+     * called when user closes friends list
      */
-    private fun concatTextItems() {
-        var i = 0
-        while (i < inputs.size) {
-            if (i + 1 < inputs.size && inputs[i + 1].type == InputTypes.TYPE_TEXT && inputs[i].type == InputTypes.TYPE_TEXT) {
-                inputs[i].append(inputs[i + 1].text)
-                inputs.removeAt(i + 1)
-                i--
-            }
-            i++
+    fun stopMentioning() {
+        clearUsers()
+        showRich(selectionStart)
+    }
+
+    fun startMentioning() {
+        val start = selectionStart
+        var s = getStringFromInputs(inputs)
+        val ins = if (s.length == 0) "@" else " @"
+        val res = "${s.substring(0, start)}$ins${s.substring(start, s.length)}"
+        clearUsers()
+        editAdd(res, start, ins.length)
+        printInputs()
+    }
+
+    fun setUserId(user: UserItem) {
+        val openedUsers = inputs
+                .filter { it is InputItemUser && it.userId.isEmpty() }
+        if (openedUsers.size > 1) throw IllegalStateException("2 users can not be edited at the same time")
+        if (openedUsers.isEmpty()) throw IllegalStateException("attempt to set user id when no edited userInputs")
+
+        (openedUsers[0] as InputItemUser).run {
+            userId = user.id
+            displayName = user.displayName
         }
+        // add text item after user
+        val index = inputs.indexOf(openedUsers[0])
+        val newText = InputItemText(" ")
+        inputs.add(index + 1, newText)
+
+        updateInputs(inputs)
+        showRich(newText.end)
     }
 
-    fun isConcatNeeded(inputs: List<InputItem>): Boolean {
-        for (i in 0 until inputs.size)
-            if (i + 1 < inputs.size &&
-                    inputs[i].type == InputTypes.TYPE_TEXT &&
-                    inputs[i + 1].type == InputTypes.TYPE_TEXT) return true
-        return false
-    }
-
-    fun editAdd(newString: CharSequence, start: Int, count: Int) {
-        recalcStringFromInputs(inputs)
+    private fun editAdd(newString: CharSequence, start: Int, count: Int) {
+        updateInputs(inputs)
 
         val addedText = newString.substring(start, start + count)
         Log.d("vorobeisj", "add \"$addedText\" start=$start, count=$count")
@@ -227,45 +189,10 @@ class MentionEditText : EditText {
         showRich(start + count)
     }
 
-    fun getItemToAdd(start: Int): InputItem? {
-        recalcStringFromInputs(inputs)
-        val edited = inputs.filter { it.isInRange(start) }
-        if (edited.isNotEmpty()) return edited[0]
-        else return null
-    }
-
-    fun getItemToRemove(start: Int, count: Int) {
-        recalcStringFromInputs(inputs)
-        val editStart = inputs.filter { it.isInRange(start) }
-        val end = start + count
-        val editEnd = inputs.filter { it.isInRange(end) }
-    }
-
-    fun getPrevious(start: Int): InputItem? {
-        val edited = inputs.filter { it.isInRange(start) }
-        if (edited.isNotEmpty()) {
-            val index = inputs.indexOf(edited[0])
-            return if (index > 0) inputs[index - 1] else null
-        }
-        return null
-    }
-
-    fun recalcStringFromInputs(inputs: List<InputItem>): String {
-//        Log.w("vorobeisj", "recalc inputs called") // todo vorobei check calls are needed
-        concatTextItems()
-        val stringBuilder = StringBuilder()
-        inputs.forEach { input ->
-            input.start = stringBuilder.length
-            stringBuilder.append(input.text)
-            input.end = stringBuilder.length
-        }
-        return stringBuilder.toString()
-    }
-
-    fun editRemoved(newString: CharSequence, start: Int, count: Int) {
+    private fun editRemove(start: Int, count: Int) {
         Log.d("vorobeisj", "remove start=$start, count=$count")
 
-        recalcStringFromInputs(inputs)
+        updateInputs(inputs)
         val editStartList = inputs.filter { it.isInRemoveRange(start) }
         var end = start + count - 1
         end = Math.max(start, end)
@@ -282,14 +209,12 @@ class MentionEditText : EditText {
                     .forEach { inputs.removeAt(it) }
             // edit edge items
             inputs[editEndIndex].run { removeUserItem(this) }
-            recalcStringFromInputs(inputs)
+            updateInputs(inputs)
             inputs[editEndIndex].run { (this as InputItemText).removeRange(this.start, start + count) }
 
             inputs[editStartIndex].run { removeUserItem(this) }
-            recalcStringFromInputs(inputs)
+            updateInputs(inputs)
             inputs[editStartIndex].run { this.removeRange(start, this.end) }
-            // check remove user-text and text-user (user-user at one user) (text-text at one text)
-            // check indexes
         } else {
             inputs[editStartIndex].run {
                 this.removeRange(start, start + count)
@@ -303,16 +228,38 @@ class MentionEditText : EditText {
                     } else {
                         userItem.userId = ""
                         onQueryUser?.invoke(userItem.displayName)
-//                        showRich(start + count)
                     }
                 }
             }
         }
     }
 
-    fun removeUserItem(userItem: InputItem) {
+    private fun clearUsers() {
+        inputs.filter { it.type == InputTypes.TYPE_USER }
+                .filter { (it as InputItemUser).userId.isEmpty() }
+                .forEach { replaceWithTextItem(it as InputItemUser) }
+    }
+
+    private fun getItemToAdd(start: Int): InputItem? {
+        updateInputs(inputs)
+        val edited = inputs.filter { it.isInRange(start) }
+        return if (edited.isNotEmpty()) edited[0] else null
+    }
+
+    private fun updateInputs(inputs: List<InputItem>): String {
+        Log.e("vorobeisj", "recalc inputs called") // todo vorobei check calls are needed
+        concatTextItems()
+        val stringBuilder = StringBuilder()
+        inputs.forEach { input ->
+            input.start = stringBuilder.length
+            stringBuilder.append(input.text)
+            input.end = stringBuilder.length
+        }
+        return stringBuilder.toString()
+    }
+
+    private fun removeUserItem(userItem: InputItem) {
         if (userItem !is InputItemUser) return
-//        if (userItem.userId.isEmpty()) return
         replaceWithTextItem(userItem, text = "")
         showRich(userItem.start)
     }
@@ -320,7 +267,7 @@ class MentionEditText : EditText {
     /**
      * @param index: index of @userItem
      */
-    fun replaceWithTextItem(userItem: InputItemUser, index: Int = inputs.indexOf(userItem), text: String = userItem.text): InputItemText {
+    private fun replaceWithTextItem(userItem: InputItemUser, index: Int = inputs.indexOf(userItem), text: String = userItem.text): InputItemText {
         val newText = InputItemText(text)
         inputs.removeAt(index)
         inputs.add(index, newText)
@@ -328,55 +275,46 @@ class MentionEditText : EditText {
         return newText
     }
 
-    fun editReplace(newString: CharSequence, start: Int, countWas: Int, countNow: Int) {
-        Log.d("vorobeisj", "editReplace start=$start, countWas=$countWas, countNow=$countNow")
-        editRemoved(getStringFromInputs(inputs), start, countWas)
-        editAdd(newString, start, countNow)
-    }
-
-    fun showRich(cursorPos: Int) {
+    private fun showRich(cursorPos: Int) {
         notToWatchText = true
-        this.setText(getSpannableFromInputs(inputs))
-        this.placeCursor(cursorPos)
+        setText(getSpannableFromInputs(inputs))
+        placeCursor(cursorPos)
         notToWatchText = false
     }
 
-    fun getSpannableFromInputs(inputs: List<InputItem>): SpannableString {
-        return SpannableString(recalcStringFromInputs(inputs)).apply {
+    private fun getSpannableFromInputs(inputs: List<InputItem>): SpannableString {
+        return SpannableString(updateInputs(inputs)).apply {
             inputs.filter { it is InputItemUser }.forEach { tag ->
-                try {
-                    setSpan(StyleSpan(Typeface.BOLD), tag.start, tag.end, 0)
-                    setSpan(ForegroundColorSpan(Color.parseColor("#ff9900")), tag.start, tag.end, 0)
-                } catch (e: IndexOutOfBoundsException) {
-                    Log.d("vorobeisj", "can not set span IOOBE ")
-                }
+                setSpan(StyleSpan(Typeface.BOLD), tag.start, tag.end, 0)
+                setSpan(ForegroundColorSpan(Color.parseColor("#ff9900")), tag.start, tag.end, 0)
             }
         }
     }
 
-    fun getStringFromInputs(inputs: List<InputItem>): String {
-        val res = inputs.joinToString("") { it.text }
-        return res
-    }
+    private fun getStringFromInputs(inputs: List<InputItem>) = inputs.joinToString("") { it.text }
 
-    fun setUserId(user: UserItem) {
-//        Log.d("vorobeisj", "setUserId==========================================")
-        val openedUsers = inputs.filter { it is InputItemUser }.filter { (it as InputItemUser).userId.isEmpty() }
-        if (openedUsers.size > 1) throw IllegalStateException("2 users can not be edited at the same time")
-        if (openedUsers.size == 1) {
-            (openedUsers[0] as InputItemUser).run {
-                userId = user.id
-                displayName = user.displayName
-            }
-            // add text item after user
-            val index = inputs.indexOf(openedUsers[0])
-            val newText = InputItemText(" ")
-            inputs.add(index + 1, newText)
-
-            recalcStringFromInputs(inputs)
-            showRich(newText.end)
+    private fun printInputs() {
+        Log.d("vorobeisj", "inputs *******************************")
+        inputs.forEach {
+            Log.d("vorobeisj", "${it.type} s=${it.start} e=${it.end} text=\'${it.text}\'")
         }
-        if (openedUsers.isEmpty()) throw IllegalStateException("attempt to set user id when no edited userInputs")
+        Log.d("vorobeisj", "**************************************")
     }
 
+    /**
+     * iterate through list and concat neighbor text items
+     */
+    private fun concatTextItems() {
+        var i = 0
+        while (i < inputs.size) {
+            if (i + 1 < inputs.size &&
+                    inputs[i].type == InputTypes.TYPE_TEXT &&
+                    inputs[i + 1].type == InputTypes.TYPE_TEXT) {
+                inputs[i].append(inputs[i + 1].text)
+                inputs.removeAt(i + 1)
+                i--
+            }
+            i++
+        }
+    }
 }
