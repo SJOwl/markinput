@@ -3,7 +3,6 @@ package com.example.sj.formattableedittext
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
-import android.text.Editable
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
@@ -44,16 +43,13 @@ class MentionEditText : EditText {
             private var cursorStartAfter = 0
             private var cursorEndAfter = 0
 
-            override fun beforeTextChange(s: CharSequence, start: Int, count: Int, after: Int) {
+            override fun beforeTextChange(s: CharSequence, strt: Int, count: Int, after: Int) {
                 if (notToWatchText) return
                 cursorStartBefore = selectionStart
-                cursorEndBefore = selectionEnd
-                Log.d("vorobeisj", "btc start=$start, count=$count, after=$after, csb=$cursorStartBefore, ceb=$cursorEndBefore")
+                cursorEndBefore = selectionStart
             }
 
             override fun onTextChange(s: CharSequence, strt: Int, before: Int, count: Int) {
-                Log.d("vorobeisj", "btc start=$strt, before=$before, after=$count, csb=$cursorStartBefore, ceb=$cursorEndBefore")
-
                 if (notToWatchText) return
 
                 cursorStartAfter = selectionStart
@@ -108,7 +104,7 @@ class MentionEditText : EditText {
         val openedUsers = inputs
                 .filter { it is InputItemUser && it.userId.isEmpty() }
         if (openedUsers.size > 1) throw IllegalStateException("2 users can not be edited at the same time")
-        if (openedUsers.isEmpty()) throw IllegalStateException("attempt to set user id when no edited userInputs")
+        if (openedUsers.isEmpty()) throw IllegalStateException("Attempt to set user id when no edited userInputs")
 
         (openedUsers[0] as InputItemUser).run {
             userId = user.id
@@ -130,7 +126,7 @@ class MentionEditText : EditText {
         Log.d("vorobeisj", "add \"$addedText\" start=$start, count=$count")
 
         var edited = getItemToAdd(start)
-                ?: throw IllegalStateException("edited item can not be null")
+                ?: throw IllegalStateException("Edited item can not be null")
 
         if (addedText == " @") {
             // todo vorobei what if pasted "some text @"?
@@ -173,7 +169,6 @@ class MentionEditText : EditText {
                         } else { // append to already mentioned user
                             val inp = InputItemText(addedText)
                             inputs.add(inputs.indexOf(edited) + 1, inp)
-//                            concatTextItems()
                         }
                     }
                     is InputItemText -> {
@@ -198,8 +193,8 @@ class MentionEditText : EditText {
         end = Math.max(start, end)
         val editEndList = inputs.filter { it.isInRemoveRange(end) }
 
-        if (editStartList.isEmpty()) throw IllegalStateException("start of removing is empty")
-        if (editEndList.isEmpty()) throw IllegalStateException("end of removing is empty")
+        if (editStartList.isEmpty()) throw IllegalStateException("Start of removing is empty")
+        if (editEndList.isEmpty()) throw IllegalStateException("End of removing is empty")
         val editStartIndex = inputs.indexOf(editStartList[0])
         val editEndIndex = inputs.indexOf(editEndList[0])
 
@@ -208,26 +203,32 @@ class MentionEditText : EditText {
             (editEndIndex - 1 downTo editStartIndex + 1)
                     .forEach { inputs.removeAt(it) }
             // edit edge items
-            inputs[editEndIndex].run { removeUserItem(this) }
+            inputs[editEndIndex].let { removeUserItem(it) }
             updateInputs(inputs)
-            inputs[editEndIndex].run { (this as InputItemText).removeRange(this.start, start + count) }
+            inputs[editEndIndex].let { (it as InputItemText).removeRange(it.start, start + count) }
 
-            inputs[editStartIndex].run { removeUserItem(this) }
+            inputs[editStartIndex].let { removeUserItem(it) }
             updateInputs(inputs)
-            inputs[editStartIndex].run { this.removeRange(start, this.end) }
+            inputs[editStartIndex].let { it.removeRange(start, it.end) }
         } else {
-            inputs[editStartIndex].run {
-                this.removeRange(start, start + count)
+            inputs[editStartIndex].let {
 
-                // edit user search
-                val userItem = this
-                if (userItem is InputItemUser) {
-                    if (userItem.userId.isNotEmpty()) {
-                        removeUserItem(userItem)
-                        showRich(userItem.start)
-                    } else {
-                        userItem.userId = ""
-                        onQueryUser?.invoke(userItem.displayName)
+                try {
+                    it.removeRange(start, start + count)
+                    // edit user search
+                    if (it is InputItemUser) {
+                        if (it.userId.isNotEmpty()) {
+                            removeUserItem(it)
+                            showRich(it.start)
+                        } else {
+                            it.userId = ""
+                            onQueryUser?.invoke(it.displayName)
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (it is InputItemUser) {
+                        removeUserItem(it)
+                        showRich(it.start)
                     }
                 }
             }
